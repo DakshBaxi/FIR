@@ -11,4 +11,4 @@
     Check all security measures to create this project, It should not be like, anyone can use this project as its confeditiol work no one can file up the FIR. Scrap real FIRS which are on the internet(especially of India) and constitution of india for getting sections to help AI for analysing story to which section, to get help of how to produce output similar to that.
 
 ### Step3:
-    Create a Plan according to the goal, to create this project, used the most profecient way to make it.         
+    Create a Plan according to the goal, to create this project, used the most profecient way to make it. I want a good ui/ux frontend as it will be used by non techy guy with a optimized backend+llm/ai         

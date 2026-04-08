@@ -1,0 +1,158 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OfficerRole {
+  OFFICER
+  SENIOR_OFFICER
+  STATION_ADMIN
+  SUPER_ADMIN
+}
+
+enum FirStatus {
+  DRAFT
+  UNDER_REVIEW
+  FINALIZED
+  FILED
+}
+
+enum CodeType {
+  IPC
+  BNS
+}
+
+model PoliceStation {
+  id           String    @id @default(uuid()) @db.Uuid
+  stationName  String    @map("station_name") @db.VarChar(200)
+  stationCode  String    @unique @map("station_code") @db.VarChar(50)
+  district     String    @db.VarChar(100)
+  state        String    @db.VarChar(100)
+  address      String    @db.Text
+  phone        String?   @db.VarChar(20)
+  email        String?   @unique @db.VarChar(150)
+  jurisdiction String?   @db.Text
+  latitude     Decimal?  @db.Decimal(10, 8)
+  longitude    Decimal?  @db.Decimal(11, 8)
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  officers     Officer[]
+  firs         Fir[]
+
+  @@map("police_stations")
+}
+
+model Officer {
+  id             String        @id @default(uuid()) @db.Uuid
+  stationId      String        @map("station_id") @db.Uuid
+  badgeNumber    String        @unique @map("badge_number") @db.VarChar(50)
+  fullName       String        @map("full_name") @db.VarChar(200)
+  rank           String        @db.VarChar(100)
+  role           OfficerRole   @default(OFFICER)
+  email          String?       @unique @db.VarChar(150)
+  phone          String        @db.VarChar(20)
+  passwordHash   String        @map("password_hash") @db.VarChar(255)
+  isActive       Boolean       @default(true) @map("is_active")
+  lastLoginAt    DateTime?     @map("last_login_at") @db.Timestamptz
+  failedAttempts Int           @default(0) @map("failed_attempts")
+  lockedUntil    DateTime?     @map("locked_until") @db.Timestamptz
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  station        PoliceStation @relation(fields: [stationId], references: [id])
+  firs           Fir[]
+  auditLogs      AuditLog[]
+  refreshTokens  RefreshToken[]
+
+  @@map("officers")
+}
+
+model Fir {
+  id                  String    @id @default(uuid()) @db.Uuid
+  firNumber           String?   @unique @map("fir_number") @db.VarChar(100)
+  stationId           String    @map("station_id") @db.Uuid
+  filedByOfficerId    String    @map("filed_by_officer_id") @db.Uuid
+  status              FirStatus @default(DRAFT)
+  complainantName     String    @map("complainant_name") @db.VarChar(200)
+  complainantAddress  String?   @map("complainant_address") @db.Text
+  complainantPhone    String?   @map("complainant_phone") @db.VarChar(20)
+  complainantIdType   String?   @map("complainant_id_type") @db.VarChar(50)
+  complainantIdNumber String?   @map("complainant_id_number") @db.VarChar(50)
+  incidentDescription String    @map("incident_description") @db.Text
+  incidentDatetime    DateTime? @map("incident_datetime") @db.Timestamptz
+  incidentLocation    String?   @map("incident_location") @db.Text
+  offenceNature       String?   @map("offence_nature") @db.VarChar(200)
+  primaryIpcSections  String[]  @map("primary_ipc_sections")
+  primaryBnsSections  String[]  @map("primary_bns_sections")
+  accusedPersons      Json      @default("[]") @map("accused_persons")
+  victims             Json      @default("[]")
+  witnesses           Json      @default("[]")
+  propertyDetails     Json      @default("{}") @map("property_details")
+  aiAnalysisRaw       Json?     @map("ai_analysis_raw")
+  firContentJson      Json?     @map("fir_content_json")
+  firContentHtml      String?   @map("fir_content_html") @db.Text
+  pdfPath             String?   @map("pdf_path") @db.VarChar(500)
+  finalizedAt         DateTime? @map("finalized_at") @db.Timestamptz
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  station             PoliceStation @relation(fields: [stationId], references: [id])
+  filedBy             Officer       @relation(fields: [filedByOfficerId], references: [id])
+
+  @@map("firs")
+}
+
+model IpcBnsSection {
+  id            String    @id @default(uuid()) @db.Uuid
+  codeType      CodeType  @map("code_type")
+  sectionNumber String    @map("section_number") @db.VarChar(20)
+  sectionTitle  String    @map("section_title") @db.VarChar(300)
+  description   String    @db.Text
+  punishment    String?   @db.Text
+  keywords      String[]
+  bnsEquivalent String?   @map("bns_equivalent") @db.VarChar(20)
+  ipcEquivalent String?   @map("ipc_equivalent") @db.VarChar(20)
+  embeddingId   String?   @map("embedding_id") @db.VarChar(100)
+  isRepealed    Boolean   @default(false) @map("is_repealed")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([codeType, sectionNumber])
+  @@map("ipc_bns_sections")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  officerId  String?  @map("officer_id") @db.Uuid
+  action     String   @db.VarChar(100)
+  resource   String?  @db.VarChar(50)
+  resourceId String?  @map("resource_id") @db.Uuid
+  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+  userAgent  String?  @map("user_agent") @db.Text
+  oldValue   Json?    @map("old_value")
+  newValue   Json?    @map("new_value")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  officer    Officer? @relation(fields: [officerId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  officerId  String    @map("officer_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash") @db.VarChar(255)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz
+  ipAddress  String?   @map("ip_address") @db.VarChar(45)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  officer    Officer   @relation(fields: [officerId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
