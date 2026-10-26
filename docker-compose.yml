@@ -1,4 +1,7 @@
-version: '3.9'
+# Runs the whole FIR stack. PostgreSQL is external: DATABASE_URL comes from .env.
+#   docker compose up -d --build
+# Then open http://localhost:5173
+# First start downloads the Ollama models (~5 GB), so it takes a while.
 
 services:
   redis:
@@ -6,8 +9,6 @@ services:
     container_name: fir_redis
     restart: unless-stopped
     command: redis-server --appendonly yes
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -16,5 +17,83 @@ services:
       timeout: 5s
       retries: 5
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: fir_ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Uncomment to use an NVIDIA GPU (needs NVIDIA Container Toolkit)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # One-shot job: pulls the LLM + embedding models into the ollama volume
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: fir_ollama_pull
+    env_file: .env
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["ollama pull $$OLLAMA_MODEL && ollama pull $$OLLAMA_EMBED_MODEL"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+  ai:
+    build: ./services/ai
+    container_name: fir_ai
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      CHROMA_DB_PATH: /app/data/chroma_db
+      AI_SERVICE_PORT: 8000
+    depends_on:
+      ollama-pull:
+        condition: service_completed_successfully
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: fir_api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      API_PORT: 4000
+      REDIS_URL: redis://redis:6379
+      AI_SERVICE_URL: http://ai:8000
+      FRONTEND_URL: http://localhost:5173
+    ports:
+      - "4000:4000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      ai:
+        condition: service_started
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    container_name: fir_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
 volumes:
   redis_data:
+  ollama_data:
