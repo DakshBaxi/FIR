@@ -13,7 +13,8 @@ RUN pnpm install --frozen-lockfile --filter @fir/frontend...
 COPY packages/shared packages/shared
 COPY apps/frontend apps/frontend
 
-RUN pnpm --filter @fir/frontend build
+RUN pnpm --filter @fir/shared build \
+  && pnpm --filter @fir/frontend build
 
 FROM nginx:1.27-alpine
 COPY apps/frontend/nginx.conf /etc/nginx/conf.d/default.conf
